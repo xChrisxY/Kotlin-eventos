@@ -27,7 +27,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LoginScreen(
     navController: NavController,
-    authService: AuthService
+    authService: AuthService,
+    onLoginSuccess: (String) -> Unit
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -113,6 +114,10 @@ fun LoginScreen(
                             authService.login(username, password)
                         }
                         if (result != null) {
+
+                            onLoginSuccess(result.accessToken)
+
+                            // Navega a la pantalla de home
                             navController.navigate("home")
                         } else {
                             errorMessage = "Credenciales incorrectas"
