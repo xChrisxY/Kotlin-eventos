@@ -1,13 +1,11 @@
 package com.example.events.ui.screens
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,45 +20,53 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.example.events.data.api.EventsService
+import com.example.events.data.api.UserService
 import com.example.events.data.model.Event
 import kotlinx.coroutines.launch
-
-import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.draw.clip
-
 import androidx.compose.ui.platform.LocalContext
-
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-
+import androidx.compose.ui.window.Dialog
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
-import kotlinx.coroutines.delay
-
+import java.io.File
+import android.content.Context
+import android.media.MediaRecorder
+import android.net.Uri
+import android.os.Environment
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.core.content.FileProvider
+import coil.compose.rememberImagePainter
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.shouldShowRationale
+import okhttp3.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    eventsService: EventsService
+    eventsService: EventsService,
+    userService: UserService
 ) {
     val coroutineScope = rememberCoroutineScope()
     var events by remember { mutableStateOf<List<Event>>(emptyList()) }
+
+    var showCreateEventDialog by remember {
+        mutableStateOf(false)
+    }
 
     LaunchedEffect(Unit) {
         coroutineScope.launch {
@@ -77,6 +83,11 @@ fun HomeScreen(
                     titleContentColor = Color.White
                 )
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showCreateEventDialog = true }) {
+                Icon(Icons.Filled.Add, "Crear Evento")
+            }
         }
     ) { innerPadding ->
         LazyColumn(
@@ -88,8 +99,407 @@ fun HomeScreen(
                 EventCard(event)
             }
         }
+
+        // Mostrar el diálogo de creación de eventos si `showCreateEventDialog` es true
+        if (showCreateEventDialog) {
+            CreateEventDialog(
+                onDismissRequest = { showCreateEventDialog = false },
+                onEventCreated = { newEvent ->
+                    // Aquí manejas el nuevo evento (p.ej., agregarlo a la lista de eventos)
+                    events = events + newEvent
+                    showCreateEventDialog = false
+                },
+                eventsService = eventsService,
+                userService = userService
+            )
+        }
+
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+@Composable
+fun CreateEventDialog(
+    onDismissRequest: () -> Unit,
+    onEventCreated: (Event) -> Unit,
+    eventsService: EventsService,
+    userService: UserService
+) {
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("") }
+    var organizerId by remember { mutableStateOf("1") } // Default organizer ID
+    var participantIds by remember { mutableStateOf<List<Int>>(emptyList()) } // Lista de IDs de participantes seleccionados
+    var allUsers by remember { mutableStateOf<List<com.example.events.data.model.User>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+    var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var recordedAudioUri by remember { mutableStateOf<Uri?>(null) }
+    val context = LocalContext.current
+    var showParticipantDialog by remember { mutableStateOf(false) } // Controla la visibilidad del diálogo de participantes
+
+    val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
+    var showCameraPermissionRationale by remember { mutableStateOf(false) } // Controla la visibilidad del rationale
+
+
+    // Cargar la lista de usuarios al iniciar el diálogo
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            //Asumiendo que tienes un endpoint para traer todos los usuarios
+            allUsers = userService.fetchAllUsers() // Implementa esta función en tu EventsService
+        }
+    }
+
+    // Lanzador para seleccionar imágenes de la galería
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+        onResult = { uris ->
+            selectedImageUris = uris
+        }
+    )
+
+    var tempImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Lanzador para tomar fotos con la cámara
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+        onResult = { success ->
+            if (success && tempImageUri != null) {
+                selectedImageUris = selectedImageUris + tempImageUri!!
+            }
+        }
+    )
+
+    fun createImageUri(context: Context): Uri {
+        val imagesDir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "EventsImages")
+        if (!imagesDir.exists()) {
+            imagesDir.mkdirs()
+        }
+        val image = File(imagesDir, "event_image_${System.currentTimeMillis()}.jpg")
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            image
+        )
+    }
+
+    fun launchCamera() {
+        if (cameraPermissionState.status.isGranted) {
+            // Permiso concedido, lanzar la cámara
+            tempImageUri = createImageUri(context)
+            cameraLauncher.launch(tempImageUri!!)
+        } else {
+            if (cameraPermissionState.status.shouldShowRationale) {
+                // Mostrar el rationale
+                showCameraPermissionRationale = true
+            } else {
+                // Solicitar el permiso directamente
+                cameraPermissionState.launchPermissionRequest()
+            }
+
+        }
+    }
+
+    // Estado y funciones para grabar audio
+    var isRecording by remember { mutableStateOf(false) }
+    val recorder = remember { MediaRecorder() }
+    var audioFilePath by remember { mutableStateOf("") } // Almacena la ruta del archivo de audio
+    // Función para iniciar la grabación de audio
+    fun startRecording() {
+        val audioDir = File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "EventsAudio")
+        if (!audioDir.exists()) {
+            audioDir.mkdirs()
+        }
+        val audioFile = File(audioDir, "event_audio_${System.currentTimeMillis()}.mp3")
+        audioFilePath = audioFile.absolutePath
+
+        recorder.apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setOutputFile(audioFilePath)
+
+            try {
+                prepare()
+                start()
+                isRecording = true
+            } catch (e: Exception) {
+                Log.e("AudioRecord", "prepare() failed: ${e.message}")
+            }
+        }
+    }
+
+    // Función para detener la grabación de audio
+    fun stopRecording() {
+        recorder.apply {
+            if (isRecording) {
+                stop()
+                release()
+                isRecording = false
+                recordedAudioUri = Uri.fromFile(File(audioFilePath))
+            }
+        }
+    }
+
+
+    Dialog(onDismissRequest = onDismissRequest) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "Crear Nuevo Evento",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Campos de texto para la información del evento
+                TextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nombre del Evento") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Descripción") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = location,
+                    onValueChange = { location = it },
+                    label = { Text("Ubicación") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = date,
+                    onValueChange = { date = it },
+                    label = { Text("Fecha (YYYY-MM-DD)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = time,
+                    onValueChange = { time = it },
+                    label = { Text("Hora (HH:MM)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = organizerId,
+                    onValueChange = { organizerId = it },
+                    label = { Text("ID del Organizador") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+
+                // Botón para abrir el diálogo de selección de participantes
+                Button(onClick = { showParticipantDialog = true }) {
+                    Text("Seleccionar Participantes")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Muestra los participantes seleccionados (opcional)
+                if (participantIds.isNotEmpty()) {
+                    Text("Participantes seleccionados: ${participantIds.joinToString(", ")}")
+                }
+
+
+
+                // Sección para adjuntar imágenes
+                Text(text = "Imágenes Adjuntas")
+                Row {
+                    Button(onClick = {
+                        imagePickerLauncher.launch(arrayOf("image/*"))
+                    }) {
+                        Text("Seleccionar Imágenes")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = {
+                        launchCamera() // Usar la función launchCamera para gestionar el permiso
+                    }) {
+                        Text("Tomar Foto")
+                    }
+                }
+                LazyRow {
+                    items(selectedImageUris) { uri ->
+                        Image(
+                            painter = rememberImagePainter(data = uri),
+                            contentDescription = "Imagen seleccionada",
+                            modifier = Modifier
+                                .size(80.dp)
+                                .padding(4.dp)
+                        )
+                    }
+                }
+
+                // Sección para grabar audio
+                Text(text = "Nota de Audio")
+                Row {
+                    Button(onClick = {
+                        if (isRecording) {
+                            stopRecording()
+                        } else {
+                            startRecording()
+                        }
+                    }) {
+                        Text(if (isRecording) "Detener Grabación" else "Grabar Audio")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    if (recordedAudioUri != null) {
+                        Text("Audio grabado: ${recordedAudioUri?.lastPathSegment}")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = onDismissRequest) {
+                        Text("Cancelar")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = {
+
+
+                        // Crear el objeto Event
+                        val newEvent = Event(
+                            id = 0, // o un valor temporal si tu API genera el ID
+                            name = name,
+                            description = description,
+                            location = location,
+                            date = date,
+                            time = time,
+                            createdAt = "",
+                            updatedAt = "",
+                            organizer = com.example.events.data.model.User(id = organizerId.toInt(), username = "", email = "", firstName = "", lastName = ""), // Asume que solo necesitas el ID
+                            participants = emptyList(), // Los participantes se envían solo por ID
+                            images = emptyList(),
+                            audioNotes = emptyList(),
+                            itemList = com.example.events.data.model.ItemList(0,"","", emptyList())
+                        )
+
+                        coroutineScope.launch {
+                            // Llamar a la función para crear el evento en el servidor
+                            val isEventCreated = eventsService.createEvent(
+                                newEvent,
+                                organizerId.toInt(),
+                                participantIds
+                            )
+
+                            if (isEventCreated) {
+                                // Subir imágenes y audio
+                                selectedImageUris.forEach { uri ->
+                                    eventsService.uploadImage(newEvent.id, uri)
+                                }
+                                if (recordedAudioUri != null) {
+                                    eventsService.uploadAudio(newEvent.id, recordedAudioUri!!)
+                                }
+                                onEventCreated(newEvent) // Notificar que el evento se creó correctamente
+                                onDismissRequest() // Cerrar el diálogo
+                            } else {
+                                // Manejar el error si la creación del evento falla
+                                println("Error al crear el evento")
+                            }
+                        }
+                    }) {
+                        Text("Crear Evento")
+                    }
+                }
+            }
+        }
+    }
+
+    // Diálogo para seleccionar participantes
+    if (showParticipantDialog) {
+        AlertDialog(
+            onDismissRequest = { showParticipantDialog = false },
+            title = { Text("Seleccionar Participantes") },
+            text = {
+                // Lista de checkboxes para cada usuario
+                Column {
+                    allUsers.forEach { user ->
+                        var isChecked by remember { mutableStateOf(participantIds.contains(user.id)) }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable {
+                                    isChecked = !isChecked
+                                    if (isChecked) {
+                                        participantIds = participantIds + user.id
+                                    } else {
+                                        participantIds = participantIds - user.id
+                                    }
+                                }
+                                .padding(4.dp)
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = null // Deshabilitar el checkbox directamente
+                            )
+                            Text("${user.firstName} ${user.lastName} (ID: ${user.id})")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showParticipantDialog = false }) {
+                    Text("Aceptar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showParticipantDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Rationale Dialog
+    if (showCameraPermissionRationale) {
+        AlertDialog(
+            onDismissRequest = { showCameraPermissionRationale = false },
+            title = { Text("Permiso de cámara necesario") },
+            text = { Text("Necesitamos permiso para acceder a la cámara para que puedas tomar fotos para el evento.") },
+            confirmButton = {
+                Button(onClick = {
+                    showCameraPermissionRationale = false
+                    cameraPermissionState.launchPermissionRequest()
+                }) {
+                    Text("Entendido")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCameraPermissionRationale = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
 
 @Composable
 fun AudioPlayerComponent(audioUrl: String) {
@@ -196,7 +606,7 @@ fun ItemListComponent(itemList: com.example.events.data.model.ItemList) {
 
                     contentDescription = "Estado del ítem",
 
-                tint = when (item.status) {
+                    tint = when (item.status) {
                         "completed" -> Color.Green
                         "pending" -> Color.Green
                         else -> Color.Gray

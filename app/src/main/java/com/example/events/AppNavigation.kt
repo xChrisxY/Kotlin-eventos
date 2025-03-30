@@ -11,6 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.events.data.api.AuthService
 import com.example.events.data.api.EventsService
+import com.example.events.data.api.UserService
 import com.example.events.ui.screens.HomeScreen
 import com.example.events.ui.screens.LoginScreen
 
@@ -38,7 +39,8 @@ fun EventsApp(modifier: Modifier = Modifier) {
         composable("home") {
             accessToken?.let { token ->
                 val eventsService = EventsService(token)
-                HomeScreen(eventsService = eventsService)
+                val userService = UserService(token)
+                HomeScreen(eventsService = eventsService, userService = userService)
             }
         }
     }

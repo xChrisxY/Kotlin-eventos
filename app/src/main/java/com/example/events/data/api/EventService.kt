@@ -8,10 +8,17 @@ import com.example.events.data.model.ItemList
 import com.example.events.data.model.AudioNote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import android.net.Uri
+import okhttp3.*
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
 
 class EventsService(private val token: String) {
     private val client = OkHttpClient()
@@ -134,4 +141,120 @@ class EventsService(private val token: String) {
             )
         }
     }
+
+    suspend fun createEvent(event: Event, organizerId: Int, participantIds: List<Int>): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val jsonBody = JSONObject().apply {
+                    put("name", event.name)
+                    put("description", event.description)
+                    put("location", event.location)
+                    put("date", event.date)
+                    put("time", event.time)
+                    put("organizer_id", organizerId)
+                    put("participants_ids", JSONArray(participantIds)) // Convertir a JSONArray
+                }.toString()
+
+                val requestBody = jsonBody.toRequestBody("application/json".toMediaTypeOrNull())
+
+                val request = Request.Builder()
+                    .url("$baseUrl/events/") // Reemplaza con tu endpoint de creación de eventos
+                    .addHeader("Authorization", "Bearer $token")
+                    .post(requestBody)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        println("Evento creado correctamente")
+                        true
+                    } else {
+                        Log.e("EventsService", "Error creating event: ${response.code}")
+                        println("Cuerpo de la respuesta: ${response.body?.string()}") // Imprimir el cuerpo de la respuesta
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("EventsService", "Exception creating event", e)
+                false
+            }
+        }
+    }
+
+    suspend fun uploadImage(eventId: Int, imageUri: Uri): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val file = File(imageUri.path!!) // Obtener el archivo de la URI
+
+                if (!file.exists()) {
+                    Log.e("EventsService", "Image file not found: ${imageUri.path}")
+                    return@withContext false
+                }
+
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart(
+                        "image",
+                        file.name,
+                        file.asRequestBody("image/*".toMediaTypeOrNull())
+                    )
+                    .build()
+
+                val request = Request.Builder()
+                    .url("$baseUrl/events/$eventId/add_image/")
+                    .addHeader("Authorization", "Bearer $token")
+                    .post(requestBody)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        println("Imagen subida correctamente")
+                        true
+                    } else {
+                        Log.e("EventsService", "Error uploading image: ${response.code}")
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("EventsService", "Exception uploading image", e)
+                false
+            }
+        }
+    }
+
+    suspend fun uploadAudio(eventId: Int, audioUri: Uri): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val file = File(audioUri.path!!)
+
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart(
+                        "audio_file",
+                        file.name,
+                        file.asRequestBody("audio/*".toMediaTypeOrNull())
+                    )
+                    .build()
+
+                val request = Request.Builder()
+                    .url("$baseUrl/events/$eventId/add_note_audio/")
+                    .addHeader("Authorization", "Bearer $token")
+                    .post(requestBody)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        println("Audio subido correctamente")
+                        true
+                    } else {
+                        Log.e("EventsService", "Error uploading audio: ${response.code}")
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("EventsService", "Exception uploading audio", e)
+                false
+            }
+        }
+    }
+
 }

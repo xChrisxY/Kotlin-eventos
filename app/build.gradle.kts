@@ -51,6 +51,16 @@ android {
 
 dependencies {
 
+    // para tomar fotos
+    implementation("androidx.camera:camera-camera2:1.3.0")
+    implementation("androidx.camera:camera-lifecycle:1.3.0")
+    implementation("androidx.camera:camera-view:1.3.0")
+
+    // para grabar audio
+    implementation("androidx.core:core-ktx:1.12.0")
+
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
     // Para el reproductor de audio
     implementation ("com.google.android.exoplayer:exoplayer-core:2.19.1")
     implementation ("com.google.android.exoplayer:exoplayer-ui:2.19.1")
