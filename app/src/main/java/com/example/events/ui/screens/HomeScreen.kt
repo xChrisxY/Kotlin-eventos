@@ -1,5 +1,6 @@
 package com.example.events.ui.screens
 
+import android.Manifest
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -141,6 +142,8 @@ fun CreateEventDialog(
 
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
     var showCameraPermissionRationale by remember { mutableStateOf(false) } // Controla la visibilidad del rationale
+    val audioPermissionState = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
+    var showAudioPermissionRationale by remember { mutableStateOf(false) }
 
 
     // Cargar la lista de usuarios al iniciar el diálogo
@@ -206,26 +209,39 @@ fun CreateEventDialog(
     val recorder = remember { MediaRecorder() }
     var audioFilePath by remember { mutableStateOf("") } // Almacena la ruta del archivo de audio
     // Función para iniciar la grabación de audio
-    fun startRecording() {
-        val audioDir = File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "EventsAudio")
-        if (!audioDir.exists()) {
-            audioDir.mkdirs()
-        }
-        val audioFile = File(audioDir, "event_audio_${System.currentTimeMillis()}.mp3")
-        audioFilePath = audioFile.absolutePath
 
-        recorder.apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setOutputFile(audioFilePath)
+    fun startRecording() {
+        if (audioPermissionState.status.isGranted) {
+            val audioDir = File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "EventsAudio")
+            if (!audioDir.exists()) {
+                audioDir.mkdirs()
+            }
+            val audioFile = File(audioDir, "event_audio_${System.currentTimeMillis()}.mp3")
+            audioFilePath = audioFile.absolutePath
 
             try {
-                prepare()
-                start()
-                isRecording = true
+                recorder.apply {
+                    setAudioSource(MediaRecorder.AudioSource.MIC)
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setOutputFile(audioFilePath)
+
+                    prepare()
+                    start()
+                    isRecording = true
+                }
             } catch (e: Exception) {
                 Log.e("AudioRecord", "prepare() failed: ${e.message}")
+                recorder.reset()
+                recorder.release()
+                // Manejar el error aquí (por ejemplo, mostrar un mensaje al usuario)
+                isRecording = false
+            }
+        } else {
+            if (audioPermissionState.status.shouldShowRationale) {
+                showAudioPermissionRationale = true
+            } else {
+                audioPermissionState.launchPermissionRequest()
             }
         }
     }
@@ -234,13 +250,40 @@ fun CreateEventDialog(
     fun stopRecording() {
         recorder.apply {
             if (isRecording) {
-                stop()
-                release()
-                isRecording = false
-                recordedAudioUri = Uri.fromFile(File(audioFilePath))
+                try {
+                    stop()
+                    release()
+                } catch (e: Exception) {
+                    Log.e("AudioRecord", "stop() failed: ${e.message}")
+                } finally {
+                    isRecording = false
+                    recordedAudioUri = Uri.fromFile(File(audioFilePath))
+                }
             }
         }
     }
+
+    if (showAudioPermissionRationale) {
+        AlertDialog(
+            onDismissRequest = { showAudioPermissionRationale = false },
+            title = { Text("Permiso de micrófono necesario") },
+            text = { Text("Necesitamos permiso para acceder al micrófono para que puedas grabar notas de audio para el evento.") },
+            confirmButton = {
+                Button(onClick = {
+                    showAudioPermissionRationale = false
+                    audioPermissionState.launchPermissionRequest()
+                }) {
+                    Text("Entendido")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAudioPermissionRationale = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
 
 
     Dialog(onDismissRequest = onDismissRequest) {
@@ -402,21 +445,21 @@ fun CreateEventDialog(
 
                         coroutineScope.launch {
                             // Llamar a la función para crear el evento en el servidor
-                            val isEventCreated = eventsService.createEvent(
+                            val eventId = eventsService.createEvent(
                                 newEvent,
                                 organizerId.toInt(),
                                 participantIds
                             )
 
-                            if (isEventCreated) {
+                            if (eventId != null) {
                                 // Subir imágenes y audio
                                 selectedImageUris.forEach { uri ->
-                                    eventsService.uploadImage(newEvent.id, uri)
+                                    eventsService.uploadImage(eventId, uri, context, eventsService.token)
                                 }
                                 if (recordedAudioUri != null) {
-                                    eventsService.uploadAudio(newEvent.id, recordedAudioUri!!)
+                                    eventsService.uploadAudio(eventId, recordedAudioUri!!)
                                 }
-                                onEventCreated(newEvent) // Notificar que el evento se creó correctamente
+                                onEventCreated(newEvent.copy(id = eventId)) // Notificar que el evento se creó correctamente
                                 onDismissRequest() // Cerrar el diálogo
                             } else {
                                 // Manejar el error si la creación del evento falla

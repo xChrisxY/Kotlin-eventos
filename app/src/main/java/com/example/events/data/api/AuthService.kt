@@ -9,7 +9,7 @@ import org.json.JSONObject
 
 class AuthService {
     private val client = OkHttpClient()
-    private val baseUrl = "http://10.0.2.2:8000/api/v1"
+    private val baseUrl = "http://192.168.1.93:8000/api/v1"
 
     suspend fun login(username: String, password: String): LoginResponse? {
         val loginRequest = LoginRequest(username, password)

@@ -1,6 +1,6 @@
 package com.example.events.data.model
 
-class Event(
+data class Event(
     val id: Int,
     val name: String,
     val description: String,

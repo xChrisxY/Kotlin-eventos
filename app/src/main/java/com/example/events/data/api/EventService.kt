@@ -1,5 +1,6 @@
 package com.example.events.data.api
 
+import android.content.ContentResolver
 import android.util.Log
 import com.example.events.data.model.Event
 import com.example.events.data.model.EventImage
@@ -19,10 +20,13 @@ import okhttp3.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
+import android.content.Context
+import android.provider.OpenableColumns
+import java.io.FileOutputStream
 
-class EventsService(private val token: String) {
+class EventsService(val token: String) {
     private val client = OkHttpClient()
-    private val baseUrl = "http://10.0.2.2:8000/api/v1" // Ajusta a tu URL base
+    private val baseUrl = "http://192.168.1.93:8000/api/v1" // Ajusta a tu URL base
 
     suspend fun fetchEvents(): List<Event> {
         return withContext(Dispatchers.IO) {
@@ -142,7 +146,7 @@ class EventsService(private val token: String) {
         }
     }
 
-    suspend fun createEvent(event: Event, organizerId: Int, participantIds: List<Int>): Boolean {
+    suspend fun createEvent(event: Event, organizerId: Int, participantIds: List<Int>): Int? {
         return withContext(Dispatchers.IO) {
             try {
                 val jsonBody = JSONObject().apply {
@@ -166,27 +170,41 @@ class EventsService(private val token: String) {
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         println("Evento creado correctamente")
-                        true
+                        // Aquí debes analizar el cuerpo de la respuesta JSON para obtener el ID del evento creado
+                        val responseBody = response.body?.string()
+                        val eventId = parseEventId(responseBody) // Implementa parseEventId
+                        eventId
                     } else {
                         Log.e("EventsService", "Error creating event: ${response.code}")
                         println("Cuerpo de la respuesta: ${response.body?.string()}") // Imprimir el cuerpo de la respuesta
-                        false
+                        null
                     }
                 }
             } catch (e: Exception) {
                 Log.e("EventsService", "Exception creating event", e)
-                false
+                null
             }
         }
     }
 
-    suspend fun uploadImage(eventId: Int, imageUri: Uri): Boolean {
+    private fun parseEventId(jsonString: String?): Int? {
+        return try {
+            val json = JSONObject(jsonString)
+            json.getInt("id") // Asume que el ID del evento se devuelve en un campo llamado "id"
+        } catch (e: Exception) {
+            Log.e("EventsService", "Error parsing event ID from JSON", e)
+            null
+        }
+    }
+
+
+    suspend fun uploadImage(eventId: Int, imageUri: Uri, context: Context, token: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                val file = File(imageUri.path!!) // Obtener el archivo de la URI
+                val file = uriToFile(imageUri, context)
 
                 if (!file.exists()) {
-                    Log.e("EventsService", "Image file not found: ${imageUri.path}")
+                    Log.e("EventsService", "Image file not found: ${file.absolutePath}")
                     return@withContext false
                 }
 
@@ -219,6 +237,38 @@ class EventsService(private val token: String) {
                 false
             }
         }
+    }
+
+    private fun uriToFile(uri: Uri, context: Context): File {
+        val contentResolver = context.contentResolver
+        val fileName = getFileName(uri, contentResolver)
+        val file = File(context.cacheDir, fileName)
+
+        try {
+            val inputStream = contentResolver.openInputStream(uri) ?: return file
+            val outputStream = FileOutputStream(file)
+            inputStream.copyTo(outputStream)
+            inputStream.close()
+            outputStream.close()
+        } catch (e: Exception) {
+            Log.e("EventsService", "Error converting URI to file", e)
+        }
+
+        return file
+    }
+
+    private fun getFileName(uri: Uri, contentResolver: ContentResolver): String {
+        var fileName: String? = null
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val displayNameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (displayNameIndex != -1) {
+                    fileName = it.getString(displayNameIndex)
+                }
+            }
+        }
+        return fileName ?: "default_file_name"
     }
 
     suspend fun uploadAudio(eventId: Int, audioUri: Uri): Boolean {

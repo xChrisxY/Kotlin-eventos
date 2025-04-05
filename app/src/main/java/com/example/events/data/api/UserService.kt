@@ -9,7 +9,7 @@ import org.json.JSONArray
 
 class UserService(private val token: String) {
     private val client = OkHttpClient()
-    private val baseUrl = "http://10.0.2.2:8000/api/v1"
+    private val baseUrl = "http://192.168.1.93:8000/api/v1"
 
     suspend fun fetchAllUsers(): List<com.example.events.data.model.User> {
         return withContext(Dispatchers.IO) {
