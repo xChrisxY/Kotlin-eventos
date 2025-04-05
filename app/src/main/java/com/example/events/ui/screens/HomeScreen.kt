@@ -50,11 +50,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.core.content.FileProvider
 import coil.compose.rememberImagePainter
+import com.example.events.data.api.AuthService
+import com.example.events.data.model.EventItem
+import com.example.events.data.model.User
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import okhttp3.*
+
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,9 +76,25 @@ fun HomeScreen(
         mutableStateOf(false)
     }
 
+    // Nuevo estado para controlar la visibilidad del diálogo de edición de ítems
+    var showEditItemDialog by remember { mutableStateOf(false) }
+
+    // Nuevo estado para almacenar el evento seleccionado
+    var selectedEvent by remember { mutableStateOf<Event?>(null) }
+
     LaunchedEffect(Unit) {
         coroutineScope.launch {
             events = eventsService.fetchEvents()
+        }
+    }
+
+    fun updateEvent(updatedEvent: Event) {
+        events = events.map { event ->
+            if (event.id == updatedEvent.id) {
+                updatedEvent
+            } else {
+                event
+            }
         }
     }
 
@@ -97,7 +120,19 @@ fun HomeScreen(
                 .fillMaxSize()
         ) {
             items(events) { event ->
-                EventCard(event)
+                EventCard(
+                    event = event,
+                    onEventModified = { updatedEvent ->
+                        updateEvent(updatedEvent)
+                    },
+                    eventsService = eventsService,
+                    userService = userService,
+                    authService = AuthService(),
+                    onShowEditItemDialog = {
+                        showEditItemDialog = true
+                        selectedEvent = event
+                    }
+                )
             }
         }
 
@@ -111,10 +146,33 @@ fun HomeScreen(
                     showCreateEventDialog = false
                 },
                 eventsService = eventsService,
-                userService = userService
+                userService = userService,
+                authService = AuthService()
             )
         }
 
+        // Mostrar el diálogo de edición de ítems
+        if (showEditItemDialog && selectedEvent != null) {
+            AddItemDialog(
+                eventId = selectedEvent!!.id,
+                onDismissRequest = {
+                    showEditItemDialog = false
+                    selectedEvent = null
+                },
+                onItemAdded = { newItem ->
+                    val updatedEvent = selectedEvent!!.copy(
+                        itemList = selectedEvent!!.itemList.copy(
+                            items = selectedEvent!!.itemList.items + newItem
+                        )
+                    )
+                    updateEvent(updatedEvent)
+                    showEditItemDialog = false
+                    selectedEvent = null
+                },
+                eventsService = eventsService,
+                userService = userService
+            )
+        }
     }
 }
 
@@ -124,7 +182,8 @@ fun CreateEventDialog(
     onDismissRequest: () -> Unit,
     onEventCreated: (Event) -> Unit,
     eventsService: EventsService,
-    userService: UserService
+    userService: UserService,
+    authService: AuthService
 ) {
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -678,20 +737,117 @@ fun ItemListComponent(itemList: com.example.events.data.model.ItemList) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddItemDialog(
+    eventId: Int,
+    onDismissRequest: () -> Unit,
+    onItemAdded: (EventItem) -> Unit,
+    eventsService: EventsService,
+    userService: UserService
+) {
+    var itemName by remember { mutableStateOf("") }
+    var responsibleIdText by remember { mutableStateOf("") } // Campo para que el usuario ingrese su ID
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
+    // Obtener el token del EventsService
+    val token = eventsService.token
+
+
+    Dialog(onDismissRequest = onDismissRequest) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Añadir Nuevo Ítem",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextField(
+                    value = itemName,
+                    onValueChange = { itemName = it },
+                    label = { Text("Nombre del Ítem") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = responsibleIdText,
+                    onValueChange = { responsibleIdText = it },
+                    label = { Text("ID del Responsable") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = onDismissRequest) {
+                        Text("Cancelar")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = {
+                        coroutineScope.launch {
+                            // Validar que responsibleIdText sea un número válido
+                            val responsibleId = responsibleIdText.toIntOrNull()
+                            if (responsibleId != null) {
+                                val newItem = eventsService.createItem(
+                                    eventId = eventId,
+                                    itemName = itemName,
+                                    responsibleId = responsibleId
+                                )
+
+                                if (newItem != null) {
+                                    onItemAdded(newItem)
+                                    onDismissRequest()
+                                } else {
+                                    // Manejar el error si la creación del ítem falla
+                                    println("Error al crear el ítem")
+                                }
+                            } else {
+                                // Manejar el caso en que responsibleIdText no es un número válido
+                                println("ID del responsable inválido")
+                            }
+                        }
+                    }) {
+                        Text("Añadir Ítem")
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
-fun EventCard(event: Event) {
+fun EventCard(
+    event: Event,
+    onEventModified: (Event) -> Unit,
+    eventsService: EventsService,
+    userService: UserService,
+    authService: AuthService,
+    onShowEditItemDialog: () -> Unit
+) {
+    var expandedState by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(16.dp)
+            .clickable { expandedState = !expandedState },
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Nombre y fecha del evento
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -709,26 +865,21 @@ fun EventCard(event: Event) {
                 )
             }
 
-            // Descripción
             Text(
                 text = event.description,
                 modifier = Modifier.padding(vertical = 8.dp),
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            // Ubicación
             Text(
                 text = "Ubicación: ${event.location}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.DarkGray
             )
 
-            // Imágenes del evento (si hay)
             if (event.images.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(event.images) { image ->
                         Image(
                             painter = rememberAsyncImagePainter(model = image.image),
@@ -757,43 +908,23 @@ fun EventCard(event: Event) {
             }
 
             // Sección de Lista de Elementos
-            if (event.itemList.items.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Lista de Elementos",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                ItemListComponent(event.itemList)
-            }
+            if (expandedState) {
+                if (event.itemList.items.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Lista de Elementos",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ItemListComponent(itemList = event.itemList)
+                }
 
-
-            // Participantes
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Participantes:",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-            LazyRow {
-                items(event.participants) { participant ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Participante",
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Text(
-                            text = "${participant.firstName} ${participant.lastName}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
+                Button(onClick = { onShowEditItemDialog() }) {
+                    Text("Añadir Ítem")
                 }
             }
         }
     }
+
 }

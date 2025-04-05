@@ -1,6 +1,6 @@
 package com.example.events.data.model
 
-class ItemList(
+data class ItemList(
     val id: Int,
     val title: String,
     val description: String? = null,

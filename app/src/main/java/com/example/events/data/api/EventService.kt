@@ -307,4 +307,57 @@ class EventsService(val token: String) {
         }
     }
 
+    suspend fun createItem(eventId: Int, itemName: String, responsibleId: Int): EventItem? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val jsonBody = JSONObject().apply {
+                    put("name", itemName)
+                    put("responsible_id", responsibleId)
+                    put("status", "pending")
+                    put("event_id", eventId)
+                }.toString()
+
+                val requestBody = jsonBody.toRequestBody("application/json".toMediaTypeOrNull())
+
+                val request = Request.Builder()
+                    .url("$baseUrl/items/") // Reemplaza con tu endpoint de creación de ítems
+                    .addHeader("Authorization", "Bearer $token")
+                    .post(requestBody)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        println("Item creado correctamente")
+                        // Aquí debes analizar el cuerpo de la respuesta JSON para obtener el nuevo ítem
+                        val responseBody = response.body?.string()
+                        responseBody?.let { parseEventItem(it) } // Implementa parseEventItem
+                    } else {
+                        Log.e("EventsService", "Error creating item: ${response.code}")
+                        println("Cuerpo de la respuesta: ${response.body?.string()}") // Imprimir el cuerpo de la respuesta
+                        null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("EventsService", "Exception creating item", e)
+                null
+            }
+        }
+    }
+    private fun parseEventItem(jsonString: String): EventItem? {
+        return try {
+            val json = JSONObject(jsonString)
+            EventItem(
+                id = json.getInt("id"),
+                name = json.getString("name"),
+                responsible = parseUser(json.getJSONObject("responsible")),
+                status = json.getString("status"),
+                addedAt = json.getString("added_at"),
+                updatedAt = json.getString("updated_at")
+            )
+        } catch (e: Exception) {
+            Log.e("EventsService", "Error parsing EventItem from JSON", e)
+            null
+        }
+    }
+
 }
