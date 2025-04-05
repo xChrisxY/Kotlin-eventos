@@ -76,11 +76,10 @@ fun HomeScreen(
         mutableStateOf(false)
     }
 
-    // Nuevo estado para controlar la visibilidad del diálogo de edición de ítems
-    var showEditItemDialog by remember { mutableStateOf(false) }
-
-    // Nuevo estado para almacenar el evento seleccionado
     var selectedEvent by remember { mutableStateOf<Event?>(null) }
+    // Nuevo estado para controlar la visibilidad del diálogo de edición de ítems
+    var showEditItemDialog =  remember { mutableStateOf(false) }
+
 
     LaunchedEffect(Unit) {
         coroutineScope.launch {
@@ -96,6 +95,10 @@ fun HomeScreen(
                 event
             }
         }
+    }
+    //Nueva Función añadida
+    fun deleteEvent(eventId: Int) {
+        events = events.filter { it.id != eventId }
     }
 
     Scaffold(
@@ -125,11 +128,14 @@ fun HomeScreen(
                     onEventModified = { updatedEvent ->
                         updateEvent(updatedEvent)
                     },
+                    onDeleteEvent = { eventToDelete ->
+                        deleteEvent(eventToDelete.id)
+                    },
                     eventsService = eventsService,
                     userService = userService,
                     authService = AuthService(),
                     onShowEditItemDialog = {
-                        showEditItemDialog = true
+                        showEditItemDialog.value = true
                         selectedEvent = event
                     }
                 )
@@ -152,11 +158,11 @@ fun HomeScreen(
         }
 
         // Mostrar el diálogo de edición de ítems
-        if (showEditItemDialog && selectedEvent != null) {
+        if (showEditItemDialog.value && selectedEvent != null) {
             AddItemDialog(
                 eventId = selectedEvent!!.id,
                 onDismissRequest = {
-                    showEditItemDialog = false
+                    showEditItemDialog.value = false
                     selectedEvent = null
                 },
                 onItemAdded = { newItem ->
@@ -166,7 +172,7 @@ fun HomeScreen(
                         )
                     )
                     updateEvent(updatedEvent)
-                    showEditItemDialog = false
+                    showEditItemDialog.value = false
                     selectedEvent = null
                 },
                 eventsService = eventsService,
@@ -836,9 +842,12 @@ fun EventCard(
     eventsService: EventsService,
     userService: UserService,
     authService: AuthService,
-    onShowEditItemDialog: () -> Unit
+    onShowEditItemDialog: () -> Unit,
+    onDeleteEvent: (Event) -> Unit
+
 ) {
     var expandedState by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     Card(
         modifier = Modifier
@@ -919,9 +928,31 @@ fun EventCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     ItemListComponent(itemList = event.itemList)
                 }
+                Row {
+                    Button(onClick = { onShowEditItemDialog() }) {
+                        Text("Añadir Ítem")
+                    }
 
-                Button(onClick = { onShowEditItemDialog() }) {
-                    Text("Añadir Ítem")
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Botón para Eliminar Evento
+                    Button(onClick = {
+                        coroutineScope.launch {
+                            val isDeleted = eventsService.deleteEvent(event.id)
+                            if (isDeleted) {
+                                // El evento se eliminó con éxito
+                                // Notificar a la HomeScreen para que actualice la lista
+                                // Aquí no necesitas enviar un evento modificado porque lo estás eliminando
+                                onDeleteEvent(event)
+                            } else {
+                                // Manejar el error si la eliminación falla
+                                Log.e("EventCard", "Error al eliminar el evento")
+                                // Mostrar un mensaje al usuario
+                            }
+                        }
+                    }) {
+                        Text("Eliminar Evento")
+                    }
                 }
             }
         }

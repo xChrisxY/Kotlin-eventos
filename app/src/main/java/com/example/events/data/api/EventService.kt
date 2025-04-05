@@ -360,4 +360,29 @@ class EventsService(val token: String) {
         }
     }
 
+    suspend fun deleteEvent(eventId: Int): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url("$baseUrl/events/$eventId/")
+                    .addHeader("Authorization", "Bearer $token")
+                    .delete()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        println("Evento eliminado correctamente")
+                        true
+                    } else {
+                        Log.e("EventsService", "Error deleting event: ${response.code}")
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("EventsService", "Exception deleting event", e)
+                false
+            }
+        }
+    }
+
 }
