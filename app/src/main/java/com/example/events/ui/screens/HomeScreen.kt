@@ -47,7 +47,16 @@ import android.os.Environment
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.core.content.FileProvider
 import coil.compose.rememberImagePainter
 import com.example.events.data.api.AuthService
@@ -61,6 +70,10 @@ import okhttp3.*
 
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -351,193 +364,286 @@ fun CreateEventDialog(
         )
     }
 
-
-
-    Dialog(onDismissRequest = onDismissRequest) {
-        Card(
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.9f)
                 .padding(16.dp),
             shape = RoundedCornerShape(16.dp),
+            tonalElevation = 8.dp
         ) {
-
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(24.dp)
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
                     text = "Crear Nuevo Evento",
-                    style = MaterialTheme.typography.headlineSmall
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
-                Spacer(modifier = Modifier.height(16.dp))
 
-                // Campos de texto para la información del evento
-                TextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nombre del Evento") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Descripción") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = { Text("Ubicación") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    label = { Text("Fecha (YYYY-MM-DD)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    value = time,
-                    onValueChange = { time = it },
-                    label = { Text("Hora (HH:MM)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    value = organizerId,
-                    onValueChange = { organizerId = it },
-                    label = { Text("ID del Organizador") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-
-                // Botón para abrir el diálogo de selección de participantes
-                Button(onClick = { showParticipantDialog = true }) {
-                    Text("Seleccionar Participantes")
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Muestra los participantes seleccionados (opcional)
-                if (participantIds.isNotEmpty()) {
-                    Text("Participantes seleccionados: ${participantIds.joinToString(", ")}")
-                }
-
-                // Sección para adjuntar imágenes
-                Text(text = "Imágenes Adjuntas")
-                Row {
-                    Button(onClick = {
-                        imagePickerLauncher.launch(arrayOf("image/*"))
-                    }) {
-                        Text("Seleccionar Imágenes")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
-                        launchCamera() // Usar la función launchCamera para gestionar el permiso
-                    }) {
-                        Text("Tomar Foto")
-                    }
-                }
-                LazyRow {
-                    items(selectedImageUris) { uri ->
-                        Image(
-                            painter = rememberImagePainter(data = uri),
-                            contentDescription = "Imagen seleccionada",
-                            modifier = Modifier
-                                .size(80.dp)
-                                .padding(4.dp)
-                        )
-                    }
-                }
-
-                // Sección para grabar audio
-                Text(text = "Nota de Audio")
-                Row {
-                    Button(onClick = {
-                        if (isRecording) {
-                            stopRecording()
-                        } else {
-                            startRecording()
-                        }
-                    }) {
-                        Text(if (isRecording) "Detener Grabación" else "Grabar Audio")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    if (recordedAudioUri != null) {
-                        Text("Audio grabado: ${recordedAudioUri?.lastPathSegment}")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth()
+                // Sección de información básica
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    TextButton(onClick = onDismissRequest) {
-                        Text("Cancelar")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nombre del Evento") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
 
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Descripción") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        maxLines = 3
+                    )
 
-                        // Crear el objeto Event
-                        val newEvent = Event(
-                            id = 0, // o un valor temporal si tu API genera el ID
-                            name = name,
-                            description = description,
-                            location = location,
-                            date = date,
-                            time = time,
-                            createdAt = "",
-                            updatedAt = "",
-                            organizer = com.example.events.data.model.User(id = organizerId.toInt(), username = "", email = "", firstName = "", lastName = ""), // Asume que solo necesitas el ID
-                            participants = emptyList(), // Los participantes se envían solo por ID
-                            images = emptyList(),
-                            audioNotes = emptyList(),
-                            itemList = com.example.events.data.model.ItemList(0,"","", emptyList())
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = { location = it },
+                        label = { Text("Ubicación") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = date,
+                            onValueChange = { date = it },
+                            label = { Text("Fecha (YYYY-MM-DD)") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
                         )
 
-                        coroutineScope.launch {
-                            // Llamar a la función para crear el evento en el servidor
-                            val eventId = eventsService.createEvent(
-                                newEvent,
-                                organizerId.toInt(),
-                                participantIds
-                            )
+                        OutlinedTextField(
+                            value = time,
+                            onValueChange = { time = it },
+                            label = { Text("Hora (HH:MM)") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                    }
 
-                            if (eventId != null) {
-                                // Subir imágenes y audio
-                                selectedImageUris.forEach { uri ->
-                                    eventsService.uploadImage(eventId, uri, context, eventsService.token)
-                                }
-                                if (recordedAudioUri != null) {
-                                    eventsService.uploadAudio(eventId, recordedAudioUri!!)
-                                }
-                                onEventCreated(newEvent.copy(id = eventId)) // Notificar que el evento se creó correctamente
-                                onDismissRequest() // Cerrar el diálogo
-                            } else {
-                                // Manejar el error si la creación del evento falla
-                                println("Error al crear el evento")
+                    OutlinedTextField(
+                        value = organizerId,
+                        onValueChange = { organizerId = it },
+                        label = { Text("ID del Organizador") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Sección de participantes
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { showParticipantDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Seleccionar Participantes")
+                    }
+
+                    if (participantIds.isNotEmpty()) {
+                        Text(
+                            text = "Participantes seleccionados: ${participantIds.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Sección multimedia
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Multimedia",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Galería",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Galería")
+                        }
+
+                        OutlinedButton(
+                            onClick = { launchCamera() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Cámara",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Cámara")
+                        }
+                    }
+
+                    // Vista previa de imágenes
+                    if (selectedImageUris.isNotEmpty()) {
+                        LazyRow(
+                            modifier = Modifier.height(100.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(selectedImageUris) { uri ->
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = "Imagen seleccionada",
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
                             }
                         }
-                    }) {
+                    }
+
+                    // Grabación de audio
+                    OutlinedButton(
+                        onClick = {
+                            if (isRecording) {
+                                stopRecording()
+                            } else {
+                                startRecording()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isRecording) Icons.Default.Close else Icons.Default.PlayArrow,
+                            contentDescription = if (isRecording) "Detener" else "Grabar",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (isRecording) "Detener grabación" else "Grabar nota de audio")
+                    }
+
+                    if (recordedAudioUri != null) {
+                        Text(
+                            text = "Audio grabado",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Botones de acción
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text("Cancelar")
+                    }
+
+                    Button(
+                        onClick = {
+                            // Validación básica
+                            if (name.isBlank() || date.isBlank() || time.isBlank()) {
+                                // Mostrar error
+                                return@Button
+                            }
+
+                            val newEvent = Event(
+                                id = 0,
+                                name = name,
+                                description = description,
+                                location = location,
+                                date = date,
+                                time = time,
+                                createdAt = "",
+                                updatedAt = "",
+                                organizer = com.example.events.data.model.User(
+                                    id = organizerId.toInt(),
+                                    username = "",
+                                    email = "",
+                                    firstName = "",
+                                    lastName = ""
+                                ),
+                                participants = emptyList(),
+                                images = emptyList(),
+                                audioNotes = emptyList(),
+                                itemList = com.example.events.data.model.ItemList(0, "", "", emptyList())
+                            )
+
+                            coroutineScope.launch {
+                                val eventId = eventsService.createEvent(
+                                    newEvent,
+                                    organizerId.toInt(),
+                                    participantIds
+                                )
+
+                                if (eventId != null) {
+                                    // Subir imágenes y audio
+                                    selectedImageUris.forEach { uri ->
+                                        eventsService.uploadImage(eventId, uri, context, eventsService.token)
+                                    }
+                                    if (recordedAudioUri != null) {
+                                        eventsService.uploadAudio(eventId, recordedAudioUri!!)
+                                    }
+                                    onEventCreated(newEvent.copy(id = eventId))
+                                    onDismissRequest()
+                                }
+                            }
+                        },
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
                         Text("Crear Evento")
                     }
                 }
             }
         }
     }
+
 
     // Diálogo para seleccionar participantes
     if (showParticipantDialog) {
@@ -608,11 +714,12 @@ fun CreateEventDialog(
     }
 }
 
-
 @Composable
 fun AudioPlayerComponent(audioUrl: String) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(0f) }
+
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(Uri.parse(audioUrl)))
@@ -621,123 +728,190 @@ fun AudioPlayerComponent(audioUrl: String) {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_ENDED) {
                         isPlaying = false
+                        progress = 0f
                     }
+                }
+
+                override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+                    isPlaying = isPlayingNow
                 }
             })
         }
     }
 
-    DisposableEffect(key1 = exoPlayer) {
+    DisposableEffect(Unit) {
         onDispose {
             exoPlayer.release()
         }
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            delay(200)
+            progress = exoPlayer.currentPosition.toFloat() / exoPlayer.duration.toFloat()
+        }
+    }
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.Gray.copy(alpha = 0.1f))
-            .padding(8.dp)
+            .padding(vertical = 4.dp),
+        shape = MaterialTheme.shapes.medium,
+        elevation = CardDefaults.cardElevation(1.dp)
     ) {
-        IconButton(
-            onClick = {
-                if (isPlaying) {
-                    exoPlayer.pause()
-                    isPlaying = false
-                } else {
-                    exoPlayer.play()
-                    isPlaying = true
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                IconButton(
+                    onClick = {
+                        if (isPlaying) {
+                            exoPlayer.pause()
+                        } else {
+                            exoPlayer.play()
+                        }
+                    },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Close else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pausar" else "Reproducir",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
-            },
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-        ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Default.CheckCircle else Icons.Default.PlayArrow,
-                contentDescription = if (isPlaying) "Pausar" else "Reproducir",
-                tint = MaterialTheme.colorScheme.primary
-            )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Nota de audio",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    LinearProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    )
+                }
+            }
         }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Text(
-            text = "Nota de audio",
-            style = MaterialTheme.typography.bodyMedium
-        )
     }
 }
 
 @Composable
 fun ItemListComponent(itemList: com.example.events.data.model.ItemList) {
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.Gray.copy(alpha = 0.1f))
-            .padding(16.dp)
-    ) {
-        Text(
-            text = itemList.title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
+            .padding(vertical = 8.dp),
+        shape = MaterialTheme.shapes.medium,
+        elevation = CardDefaults.cardElevation(1.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         )
-
-        itemList.description?.let {
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
+                text = itemList.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-        }
 
-        itemList.items.forEach { item ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Ícono de estado
-                Icon(
-                    imageVector = when (item.status) {
-                        "completed" -> Icons.Default.CheckCircle
-                        "pending" -> Icons.Default.CheckCircle
-                        else -> Icons.Default.Warning // Para manejar estados no reconocidos
-                    },
-
-                    contentDescription = "Estado del ítem",
-
-                    tint = when (item.status) {
-                        "completed" -> Color.Green
-                        "pending" -> Color.Green
-                        else -> Color.Gray
-                    },
-                    modifier = Modifier.size(24.dp)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Nombre del ítem
+            itemList.description?.let {
                 Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Responsable
-                Text(
-                    text = item.responsible.firstName,
+                    text = it,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
+            }
+
+            Divider(
+                modifier = Modifier.padding(bottom = 8.dp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemList.items.forEach { item ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small),
+                        color = when (item.status) {
+                            "completed" -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                            else -> MaterialTheme.colorScheme.surface
+                        },
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = when (item.status) {
+                                "completed" -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                            }
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        when (item.status) {
+                                            "completed" -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.surface
+                                        }
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = when (item.status) {
+                                            "completed" -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                                        },
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (item.status == "completed") {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Completado",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Responsable: ${item.responsible.firstName}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -835,6 +1009,7 @@ fun AddItemDialog(
     }
 }
 
+
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun EventCard(
@@ -845,140 +1020,206 @@ fun EventCard(
     authService: AuthService,
     onShowEditItemDialog: () -> Unit,
     onDeleteEvent: (Event) -> Unit,
-
 ) {
     var expandedState by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val notificationPermissionState = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
 
-    fun launchNotification(){
-        if (notificationPermissionState.status.isGranted) {
-            // Permiso concedido, lanzar la cámara
-            eventsService.sendNotificationToParticipants(context, event)
-
-        } else {
-            // Permiso no concedido, solicitarlo
-            notificationPermissionState.launchPermissionRequest()
-        }
-    }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable { expandedState = !expandedState },
-        elevation = CardDefaults.cardElevation(4.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Header con icono de evento
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = event.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "${event.date} - ${event.time}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = "Evento",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp))
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = event.name,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = "${event.date} • ${event.time}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+
+                            Icon(
+                            imageVector = if (expandedState) Icons.Default.AddCircle else Icons.Default.ArrowDropDown,
+                    contentDescription = if (expandedState) "Mostrar menos" else "Mostrar más",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Descripción
             Text(
                 text = event.description,
-                modifier = Modifier.padding(vertical = 8.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
-
-            Text(
-                text = "Ubicación: ${event.location}",
+                modifier = Modifier.padding(vertical = 4.dp),
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.DarkGray
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
             )
 
+            // Ubicación con icono
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = "Ubicación",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = event.location,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+            }
+
+            // Imágenes (si existen)
             if (event.images.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(modifier = Modifier.height(12.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.height(120.dp)
+                ) {
                     items(event.images) { image ->
-                        Image(
-                            painter = rememberAsyncImagePainter(model = image.image),
+                        AsyncImage(
+                            model = image.image,
                             contentDescription = image.caption ?: "Imagen del evento",
+                            contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(100.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
+                                .width(160.dp)
+                                .clip(RoundedCornerShape(8.dp))
                         )
                     }
                 }
             }
 
-            if (event.audioNotes.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Notas de Audio",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                event.audioNotes.forEach { audioNote ->
-                    AudioPlayerComponent(audioUrl = audioNote.audioFile)
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-
-            // Sección de Lista de Elementos
+            // Contenido expandible
             if (expandedState) {
-                if (event.itemList.items.isNotEmpty()) {
+                // Notas de audio
+                if (event.audioNotes.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Lista de Elementos",
+                        text = "Notas de Audio",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
+                    event.audioNotes.forEach { audioNote ->
+                        AudioPlayerComponent(audioUrl = audioNote.audioFile)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                // Lista de elementos
+                if (event.itemList.items.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     ItemListComponent(itemList = event.itemList)
                 }
-                Row {
-                    Button(onClick = { onShowEditItemDialog() }) {
-                        Text("Añadir Ítem")
+
+                // Botones de acción
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    // Botón para añadir ítem
+                    OutlinedButton(
+                        onClick = { onShowEditItemDialog() },
+                        modifier = Modifier.padding(end = 8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Añadir",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Añadir ítem")
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Botón para Eliminar Evento
-                    Button(onClick = {
-                        coroutineScope.launch {
-                            val isDeleted = eventsService.deleteEvent(event.id)
-                            if (isDeleted) {
-                                // El evento se eliminó con éxito
-                                // Notificar a la HomeScreen para que actualice la lista
-                                // Aquí no necesitas enviar un evento modificado porque lo estás eliminando
-                                onDeleteEvent(event)
+                    // Botón de notificación
+                    OutlinedButton(
+                        onClick = {
+                            if (notificationPermissionState.status.isGranted) {
+                                eventsService.sendNotificationToParticipants(context, event)
                             } else {
-                                // Manejar el error si la eliminación falla
-                                Log.e("EventCard", "Error al eliminar el evento")
-                                // Mostrar un mensaje al usuario
+                                notificationPermissionState.launchPermissionRequest()
                             }
-                        }
-                    }) {
-                        Text("Eliminar Evento")
+                        },
+                        modifier = Modifier.padding(end = 8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notificar",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Notificar")
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
-                        launchNotification()
-                    }) {
-                        Text("Mandar Notificación")
+                    // Botón para eliminar
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                if (eventsService.deleteEvent(event.id)) {
+                                    onDeleteEvent(event)
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Eliminar",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Eliminar")
                     }
-
                 }
             }
-
         }
     }
-
 }
