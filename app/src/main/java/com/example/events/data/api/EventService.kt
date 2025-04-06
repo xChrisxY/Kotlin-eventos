@@ -22,6 +22,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import android.content.Context
 import android.provider.OpenableColumns
+import com.example.events.data.model.RegisterRequest
 import java.io.FileOutputStream
 
 class EventsService(val token: String) {
@@ -384,5 +385,6 @@ class EventsService(val token: String) {
             }
         }
     }
+
 
 }

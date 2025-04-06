@@ -138,6 +138,15 @@ fun LoginScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            // Botón de Registro
+            TextButton(onClick = { navController.navigate("register") }, // Navegar a la pantalla de registro
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text("¿Aún no tienes una cuenta? Regístrate", color = Color.White)
+            }
+
+
         }
     }
 }

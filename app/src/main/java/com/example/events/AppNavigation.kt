@@ -14,6 +14,7 @@ import com.example.events.data.api.EventsService
 import com.example.events.data.api.UserService
 import com.example.events.ui.screens.HomeScreen
 import com.example.events.ui.screens.LoginScreen
+import com.example.events.ui.screens.RegistrationScreen
 
 @Composable
 fun EventsApp(modifier: Modifier = Modifier) {
@@ -35,6 +36,9 @@ fun EventsApp(modifier: Modifier = Modifier) {
                     navController.navigate("home")
                 }
             )
+        }
+        composable("register") {
+            RegistrationScreen(navController = navController, authService = authService)
         }
         composable("home") {
             accessToken?.let { token ->
