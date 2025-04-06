@@ -1,5 +1,7 @@
 package com.example.events.data.api
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ContentResolver
 import android.util.Log
 import com.example.events.data.model.Event
@@ -21,7 +23,14 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.OpenableColumns
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import android.Manifest
+import com.example.events.R
 import com.example.events.data.model.RegisterRequest
 import java.io.FileOutputStream
 
@@ -386,5 +395,54 @@ class EventsService(val token: String) {
         }
     }
 
+    fun sendNotificationToParticipants(context: Context, event: Event) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Crear el canal de notificación solo si es Android 8.0 (Oreo) o superior
+            val channelId = "event_notification_channel"  // ID único para el canal
+            val channelName = "Event Notifications"
+            val channelDescriptionText = "Notificaciones sobre eventos"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT // Nivel de importancia
+            val channel = NotificationChannel(
+                channelId,
+                channelName,
+                importance
+                ).apply {
+                    description = channelDescriptionText
+                }
+
+            // Registrar el canal con el sistema
+            val notificationManager: NotificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+
+                // Construir la notificación
+            val builder = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_launcher_foreground) // Reemplaza con tu icono
+                .setContentTitle("¡Evento: ${event.name}!")
+                .setContentText(event.description + "\n" + "El evento será el día ${event.date}" + "\n" + "El horario ${event.time}" )
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setStyle(NotificationCompat.BigTextStyle()
+                    .bigText(event.description))
+                .setAutoCancel(true)
+
+
+                // Enviar la notificación
+            with(NotificationManagerCompat.from(context)) {
+                if (ActivityCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED) {
+
+                        Log.d("Eventos", "No se ha concedido el permiso de notificaciones")
+                        return
+                    }
+                    notify(event.id, builder.build())
+                    Log.d("Eventos", "se ha enviado la notificación")
+
+                }
+            } else{
+                Log.d("Eventos", "No se han podido enviar las notificaciones por la version de android")
+            }
+    }
 
 }

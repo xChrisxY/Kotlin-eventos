@@ -137,9 +137,11 @@ fun HomeScreen(
                     onShowEditItemDialog = {
                         showEditItemDialog.value = true
                         selectedEvent = event
-                    }
+                    },
+
                 )
             }
+        }
         }
 
         // Mostrar el diálogo de creación de eventos si `showCreateEventDialog` es true
@@ -180,7 +182,7 @@ fun HomeScreen(
             )
         }
     }
-}
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -430,8 +432,6 @@ fun CreateEventDialog(
                 if (participantIds.isNotEmpty()) {
                     Text("Participantes seleccionados: ${participantIds.joinToString(", ")}")
                 }
-
-
 
                 // Sección para adjuntar imágenes
                 Text(text = "Imágenes Adjuntas")
@@ -835,6 +835,7 @@ fun AddItemDialog(
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun EventCard(
     event: Event,
@@ -843,11 +844,24 @@ fun EventCard(
     userService: UserService,
     authService: AuthService,
     onShowEditItemDialog: () -> Unit,
-    onDeleteEvent: (Event) -> Unit
+    onDeleteEvent: (Event) -> Unit,
 
 ) {
     var expandedState by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val notificationPermissionState = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
+
+    fun launchNotification(){
+        if (notificationPermissionState.status.isGranted) {
+            // Permiso concedido, lanzar la cámara
+            eventsService.sendNotificationToParticipants(context, event)
+
+        } else {
+            // Permiso no concedido, solicitarlo
+            notificationPermissionState.launchPermissionRequest()
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -953,8 +967,17 @@ fun EventCard(
                     }) {
                         Text("Eliminar Evento")
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = {
+                        launchNotification()
+                    }) {
+                        Text("Mandar Notificación")
+                    }
+
                 }
             }
+
         }
     }
 
