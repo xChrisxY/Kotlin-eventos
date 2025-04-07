@@ -1,6 +1,7 @@
 package com.example.events.ui.screens
 
 import android.Manifest
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,10 +42,14 @@ import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
 import java.io.File
 import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -72,8 +77,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.app.ActivityCompat
 import coil.compose.AsyncImage
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
+import java.io.IOException
+import java.util.Locale
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -225,6 +234,93 @@ fun CreateEventDialog(
     val audioPermissionState = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
     var showAudioPermissionRationale by remember { mutableStateOf(false) }
 
+    var eventLocation by remember { mutableStateOf("") }
+    // Permisos de ubicación
+    val locationPermissionState = rememberPermissionState(
+        android.Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    // Función para obtener la ubicación
+    fun getCurrentLocation() {
+        if (locationPermissionState.status.isGranted) {
+            try {
+                if (ActivityCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    // Si los permisos fueron revocados después de verificar
+                    locationPermissionState.launchPermissionRequest()
+                    return
+                }
+
+                fusedLocationClient.lastLocation
+                    .addOnSuccessListener { location: Location? ->
+                        location?.let { loc ->
+                            // Convertir coordenadas a dirección
+                            val geocoder = Geocoder(context, Locale.getDefault())
+                            try {
+                                val addresses = geocoder.getFromLocation(
+                                    loc.latitude,
+                                    loc.longitude,
+                                    1
+                                )
+
+                                addresses?.firstOrNull()?.let { address ->
+                                    val addressText = buildString {
+                                        address.thoroughfare?.let { append("$it, ") }
+                                        address.subLocality?.let { append("$it, ") }
+                                        address.locality?.let { append(it) }
+                                    }
+                                    eventLocation = if (addressText.isNotEmpty()) {
+                                        addressText
+                                    } else {
+                                        "${loc.latitude}, ${loc.longitude}"
+                                    }
+                                } ?: run {
+                                    eventLocation = "${loc.latitude}, ${loc.longitude}"
+                                }
+                            } catch (e: IOException) {
+                                eventLocation = "${loc.latitude}, ${loc.longitude}"
+                                Toast.makeText(
+                                    context,
+                                    "No se pudo obtener la dirección, mostrando coordenadas",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } ?: run {
+                            Toast.makeText(
+                                context,
+                                "No se pudo obtener la ubicación",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(
+                            context,
+                            "Error al obtener ubicación: ${e.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    "Error: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } else {
+            // Solicitar permiso si no está concedido
+            locationPermissionState.launchPermissionRequest()
+        }
+    }
+
 
     // Cargar la lista de usuarios al iniciar el diálogo
     LaunchedEffect(Unit) {
@@ -233,6 +329,8 @@ fun CreateEventDialog(
             allUsers = userService.fetchAllUsers() // Implementa esta función en tu EventsService
         }
     }
+
+
 
     // Lanzador para seleccionar imágenes de la galería
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -411,12 +509,24 @@ fun CreateEventDialog(
                     )
 
                     OutlinedTextField(
-                        value = location,
-                        onValueChange = { location = it },
+                        value = eventLocation, // Usa el estado 'location' que ya tenías
+                        onValueChange = { eventLocation = it },
                         label = { Text("Ubicación") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        singleLine = true
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = { getCurrentLocation() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = "Obtener ubicación actual",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     )
 
                     Row(
